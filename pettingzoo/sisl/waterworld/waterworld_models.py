@@ -66,7 +66,7 @@ class Evaders(MovingObject):
 
         self.color = (145, 250, 116)
         self.shape.collision_type = collision_type
-        self.shape.counter = 0
+        self.shape.counter = 0 # used to count the required number of cooperative agents before distributing reward
         self.shape.max_speed = max_speed
         self.shape.density = 0.01
 

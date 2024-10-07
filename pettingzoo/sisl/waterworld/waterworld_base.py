@@ -684,6 +684,13 @@ class WaterworldBase:
             # For giving reward to pursuer
             pursuer_shape.food_indicator = 1
 
+            # Reset evader position & velocity
+            x, y = self._generate_coord(evader_shape.radius)
+            vx, vy = self._generate_speed(evader_shape.max_speed)
+
+            evader_shape.reset_position(x, y)
+            evader_shape.reset_velocity(vx, vy)
+
         return False
 
     def pursuer_evader_separate_callback(self, arbiter, space, data):
@@ -695,21 +702,10 @@ class WaterworldBase:
         """
         pursuer_shape, evader_shape = arbiter.shapes
 
-        if evader_shape.counter < self.n_coop:
-            # Remove one collision from evader
-            evader_shape.counter -= 1
-        else:
-            evader_shape.counter = 0
-
-            # For giving reward to pursuer
-            pursuer_shape.food_indicator = 1
-
-            # Reset evader position & velocity
-            x, y = self._generate_coord(evader_shape.radius)
-            vx, vy = self._generate_speed(evader_shape.max_speed)
-
-            evader_shape.reset_position(x, y)
-            evader_shape.reset_velocity(vx, vy)
+        # Remove one collision from evader
+        evader_shape.counter -= 1
+        # Ensure the counter has a minimum of 0
+        # evader_shape.counter = np.min([0,evader_shape.counter])
 
         pursuer_shape.food_touched_indicator -= 1
 
