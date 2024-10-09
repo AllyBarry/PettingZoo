@@ -1,5 +1,6 @@
 import math
 
+import itertools
 import gymnasium
 import numpy as np
 import pygame
@@ -119,6 +120,9 @@ class WaterworldBase:
         self.get_spaces()
         self._seed()
 
+        # Custom reward shaping
+        self.min_distance_between_pursuers = 2*(radius*2*self.pixel_scale) * np.sin((2*np.pi/n_pursuers) /2)
+
     def get_spaces(self):
         """Define the action and observation spaces for all of the agents."""
         if self.speed_features:
@@ -214,6 +218,14 @@ class WaterworldBase:
                     radius=self.obstacle_radius,
                 )
             )
+
+    def is_distance_between_pursuers_satisfied(self):
+        min_distance_agents = None
+        for (i,j) in itertools.combinations(self.pursuers,2):
+            dist_between = np.linalg.norm(self.pursuers[i].body.position - self.pursuers[j].body.position)
+            if (min_distance_agents and dist_between < min_distance_agents) or not min_distance_agents:
+                min_distance_agents = dist_between
+        return min_distance_agents > self.min_distance_between_pursuers
 
     def close(self):
         if self.screen is not None:
@@ -680,7 +692,7 @@ class WaterworldBase:
         # Indicate that food is touched by pursuer
         pursuer_shape.food_touched_indicator += 1
 
-        if evader_shape.counter >= self.n_coop:
+        if evader_shape.counter >= self.n_coop and self.is_distance_between_pursuers_satisfied():
             # For giving reward to pursuer
             pursuer_shape.food_indicator = 1
 
