@@ -45,6 +45,7 @@ class WaterworldBase:
         max_cycles=500,
         render_mode=None,
         FPS=FPS,
+        specify_min_distance=False,
     ):
         """Input keyword arguments.
 
@@ -121,7 +122,7 @@ class WaterworldBase:
         self._seed()
 
         # Custom reward shaping
-        self.min_distance_between_pursuers = 2*(radius*2*self.pixel_scale) * np.sin((2*np.pi/n_pursuers) /2)
+        self.min_distance_between_pursuers = 2*(radius*2*self.pixel_scale) * np.sin((2*np.pi/n_pursuers) /2) if specify_min_distance else None
 
     def get_spaces(self):
         """Define the action and observation spaces for all of the agents."""
@@ -220,6 +221,8 @@ class WaterworldBase:
             )
 
     def is_distance_between_pursuers_satisfied(self):
+        if not self.min_distance_between_pursuers:
+            return True
         min_distance_agents = None
         for (i,j) in itertools.combinations(self.pursuers,2):
             dist_between = np.linalg.norm(self.pursuers[i].body.position - self.pursuers[j].body.position)
