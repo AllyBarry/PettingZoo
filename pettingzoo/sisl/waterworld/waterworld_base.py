@@ -45,7 +45,7 @@ class WaterworldBase:
         max_cycles=500,
         render_mode=None,
         FPS=FPS,
-        specify_min_distance=False,
+        specify_min_distance=True,
     ):
         """Input keyword arguments.
 
