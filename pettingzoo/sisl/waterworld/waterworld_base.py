@@ -220,15 +220,46 @@ class WaterworldBase:
                 )
             )
 
+    # Custom functions for reward metrics
     def is_distance_between_pursuers_satisfied(self):
         if not self.min_distance_between_pursuers:
             return True
         min_distance_agents = None
-        for (i,j) in itertools.combinations(self.pursuers,2):
-            dist_between = np.linalg.norm(self.pursuers[i].body.position - self.pursuers[j].body.position)
+        for (pursuer_i,pursuer_j) in itertools.combinations(self.pursuers,2):
+            dist_between = np.linalg.norm(pursuer_i.body.position - pursuer_j.body.position)
             if (min_distance_agents and dist_between < min_distance_agents) or not min_distance_agents:
                 min_distance_agents = dist_between
         return min_distance_agents > self.min_distance_between_pursuers
+
+    def formation_metric(self):
+        formation_sum = 0
+        agent_combinations = list(itertools.combinations(self.pursuers,2))
+        for (pursuer_i,pursuer_j) in agent_combinations:
+            dist_between = np.linalg.norm(pursuer_i.body.position - pursuer_j.body.position)
+            dif_dist_and_min = self.min_distance_between_pursuers-np.min([dist_between, self.min_distance_between_pursuers])
+            formation_sum += dif_dist_and_min/self.min_distance_between_pursuers
+        return formation_sum / len(agent_combinations)
+
+    def closeness_metric(self, agent):
+        # Assumes just one evader
+        r_food = 2 * self.base_radius * self.pixel_scale
+        radius_outer = 2 * r_food 
+        # Each agent
+        dist_agent_to_food_centre = np.linalg.norm(self.evaders[0].body.position - agent.body.position)
+        closeness_metric = ((radius_outer - r_food) - np.min([np.abs(dist_agent_to_food_centre - r_food),r_food]))/(radius_outer - r_food)
+        return closeness_metric
+
+    def closeness_metric_all_agents(self):
+        closeness_sum = 0
+        for agent in self.pursuers:
+            closeness_sum += self.closeness_metric(agent)
+        return closeness_sum / len(self.pursuers)
+
+    # Pseudo feedback signal
+    def pseudo_feedback_signal(self):
+        alpha_closeness = 2
+        beta_formation = 1
+        return beta_formation * self.formation_metric() + alpha_closeness * self.closeness_metric_all_agents()
 
     def close(self):
         if self.screen is not None:
@@ -470,14 +501,19 @@ class WaterworldBase:
             obs_list = self.observe_list()
             self.last_obs = obs_list
 
+            # custom feedback signal:
+            feedback_signal = self.pseudo_feedback_signal()
+        
             for id in range(self.n_pursuers):
                 p = self.pursuers[id]
 
                 # reward for food caught, encountered and poison
+                # + custom feedback signal
                 self.behavior_rewards[id] = (
                     self.food_reward * p.shape.food_indicator
                     + self.encounter_reward * p.shape.food_touched_indicator
                     + self.poison_reward * p.shape.poison_indicator
+                    + feedback_signal
                 )
 
                 p.shape.food_indicator = 0
