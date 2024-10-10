@@ -503,6 +503,7 @@ class WaterworldBase:
 
             # custom feedback signal:
             feedback_signal = self.pseudo_feedback_signal()
+            print(f"Feedback signal: {feedback_signal}")
         
             for id in range(self.n_pursuers):
                 p = self.pursuers[id]
@@ -515,6 +516,7 @@ class WaterworldBase:
                     + self.poison_reward * p.shape.poison_indicator
                     + feedback_signal
                 )
+                print(f"Behaviour reward {id}: {self.behavior_rewards[id]}")
 
                 p.shape.food_indicator = 0
                 p.shape.poison_indicator = 0
@@ -731,16 +733,17 @@ class WaterworldBase:
         # Indicate that food is touched by pursuer
         pursuer_shape.food_touched_indicator += 1
 
-        if evader_shape.counter >= self.n_coop and self.is_distance_between_pursuers_satisfied():
-            # For giving reward to pursuer
-            pursuer_shape.food_indicator = 1
+        # Deactivate food reward for now and prevent evader from moving randomly
+        # if evader_shape.counter >= self.n_coop and self.is_distance_between_pursuers_satisfied():
+        #     # For giving reward to pursuer
+        #     pursuer_shape.food_indicator = 1
 
-            # Reset evader position & velocity
-            x, y = self._generate_coord(evader_shape.radius)
-            vx, vy = self._generate_speed(evader_shape.max_speed)
+        #     # Reset evader position & velocity
+        #     x, y = self._generate_coord(evader_shape.radius)
+        #     vx, vy = self._generate_speed(evader_shape.max_speed)
 
-            evader_shape.reset_position(x, y)
-            evader_shape.reset_velocity(vx, vy)
+        #     evader_shape.reset_position(x, y)
+        #     evader_shape.reset_velocity(vx, vy)
 
         return False
 
