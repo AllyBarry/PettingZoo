@@ -500,10 +500,6 @@ class WaterworldBase:
 
             obs_list = self.observe_list()
             self.last_obs = obs_list
-
-            # custom feedback signal:
-            feedback_signal = self.pseudo_feedback_signal()
-            print(f"Feedback signal: {feedback_signal}")
         
             for id in range(self.n_pursuers):
                 p = self.pursuers[id]
@@ -514,7 +510,6 @@ class WaterworldBase:
                     self.food_reward * p.shape.food_indicator
                     + self.encounter_reward * p.shape.food_touched_indicator
                     + self.poison_reward * p.shape.poison_indicator
-                    + feedback_signal
                 )
                 print(f"Behaviour reward {id}: {self.behavior_rewards[id]}")
 
@@ -523,13 +518,19 @@ class WaterworldBase:
 
             rewards = np.array(self.behavior_rewards) + np.array(self.control_rewards)
 
-            local_reward = rewards
-            global_reward = local_reward.mean()
+            # Custom: change to create global reward as feedback signal, add to local rewards
+            # custom feedback signal:
+            feedback_signal = self.pseudo_feedback_signal()
+            print(f"Feedback signal: {feedback_signal}")
+            global_reward = np.array(self.n_pursuers) * feedback_signal # array of feedback signal for each agent
+            # local_reward = rewards
+            # global_reward = local_reward.mean()
 
             # Distribute local and global rewards according to local_ratio
-            self.last_rewards = local_reward * self.local_ratio + global_reward * (
-                1 - self.local_ratio
-            )
+            # self.last_rewards = local_reward * self.local_ratio + global_reward * (
+            #     1 - self.local_ratio
+            # )
+            self.last_rewards = rewards + global_reward
 
             self.frames += 1
 
