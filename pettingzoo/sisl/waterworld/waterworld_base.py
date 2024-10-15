@@ -259,7 +259,7 @@ class WaterworldBase:
     def pseudo_feedback_signal(self):
         alpha_closeness = 2
         beta_formation = 1
-        return beta_formation * self.formation_metric() + alpha_closeness * self.closeness_metric_all_agents()
+        return (beta_formation * self.formation_metric() + alpha_closeness * self.closeness_metric_all_agents()) / (alpha_closeness + beta_formation)
 
     def close(self):
         if self.screen is not None:
@@ -511,7 +511,7 @@ class WaterworldBase:
                     + self.encounter_reward * p.shape.food_touched_indicator
                     + self.poison_reward * p.shape.poison_indicator
                 )
-                print(f"Behaviour reward {id}: {self.behavior_rewards[id]}")
+                # print(f"Behaviour reward {id}: {self.behavior_rewards[id]}")
 
                 p.shape.food_indicator = 0
                 p.shape.poison_indicator = 0
@@ -521,8 +521,8 @@ class WaterworldBase:
             # Custom: change to create global reward as feedback signal, add to local rewards
             # custom feedback signal:
             feedback_signal = self.pseudo_feedback_signal()
-            print(f"Feedback signal: {feedback_signal}")
-            global_reward = np.array(self.n_pursuers) * feedback_signal # array of feedback signal for each agent
+            # print(f"Feedback signal: {feedback_signal}")
+            global_reward = np.ones(self.n_pursuers) * feedback_signal # array of feedback signal for each agent
             # local_reward = rewards
             # global_reward = local_reward.mean()
 
