@@ -259,7 +259,8 @@ class WaterworldBase:
     def pseudo_feedback_signal(self):
         alpha_closeness = 2
         beta_formation = 1
-        return (beta_formation * self.formation_metric() + alpha_closeness * self.closeness_metric_all_agents()) / (alpha_closeness + beta_formation)
+        # return (beta_formation * self.formation_metric() + alpha_closeness * self.closeness_metric_all_agents()) / (alpha_closeness + beta_formation)
+        return self.closeness_metric_all_agents()
 
     def close(self):
         if self.screen is not None:
@@ -506,8 +507,10 @@ class WaterworldBase:
 
                 # reward for food caught, encountered and poison
                 # + custom feedback signal
+                feedback_signal = self.pseudo_feedback_signal()
                 self.behavior_rewards[id] = (
-                    self.food_reward * p.shape.food_indicator
+                    # self.food_reward * p.shape.food_indicator
+                    self.food_reward * feedback_signal
                     + self.encounter_reward * p.shape.food_touched_indicator
                     + self.poison_reward * p.shape.poison_indicator
                 )
@@ -518,11 +521,6 @@ class WaterworldBase:
 
             rewards = np.array(self.behavior_rewards) + np.array(self.control_rewards)
 
-            # Custom: change to create global reward as feedback signal, add to local rewards
-            # custom feedback signal:
-            feedback_signal = self.pseudo_feedback_signal()
-            # print(f"Feedback signal: {feedback_signal}")
-            global_reward = np.ones(self.n_pursuers) * feedback_signal # array of feedback signal for each agent
             # local_reward = rewards
             # global_reward = local_reward.mean()
 
@@ -530,7 +528,7 @@ class WaterworldBase:
             # self.last_rewards = local_reward * self.local_ratio + global_reward * (
             #     1 - self.local_ratio
             # )
-            self.last_rewards = rewards + global_reward
+            self.last_rewards = rewards
 
             self.frames += 1
 
