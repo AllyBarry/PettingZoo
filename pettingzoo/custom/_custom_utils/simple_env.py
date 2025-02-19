@@ -1,15 +1,16 @@
+import functools
 import os
+import random
+from copy import copy
 
 import gymnasium
 import numpy as np
 import pygame
-from gymnasium import spaces
+from gymnasium.spaces import Box, Discrete, MultiDiscrete
 from gymnasium.utils import seeding
-
 from pettingzoo import AECEnv
-from pettingzoo.mpe._mpe_utils.core import Agent
-from pettingzoo.utils import wrappers
-from pettingzoo.utils import agent_selector
+from pettingzoo.custom._custom_utils.core import Agent
+from pettingzoo.utils import agent_selector, wrappers
 
 alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -27,10 +28,15 @@ def make_env(raw_env):
     return env
 
 
-class SimpleEnv(AECEnv):
+class SimpleEnvironment(AECEnv):
+    """The metadata holds environment constants.
+
+    The "name" metadata allows the environment to be pretty printed.
+    """
+
     metadata = {
+        "name": "grid_surveillance_environment_v0",
         "render_modes": ["human", "rgb_array"],
-        "is_parallelizable": True,
         "render_fps": 10,
     }
 
@@ -41,24 +47,25 @@ class SimpleEnv(AECEnv):
         max_cycles,
         render_mode=None,
         continuous_actions=False,
-        local_ratio=None,
-        dynamic_rescaling=False,
     ):
+        """The init method takes in environment arguments.
+
+        Add text
+        """
         super().__init__()
 
         self.render_mode = render_mode
         pygame.init()
         self.viewer = None
         self.width = 700
-        self.height = 700
-        self.screen = pygame.Surface([self.width, self.height])
+        self.height = 500
+        self.screen = pygame.Surface([self.width, self.height], pygame.SRCALPHA)
         self.max_size = 1
-        self.game_font = pygame.freetype.Font(
-            os.path.join(os.path.dirname(__file__), "secrcode.ttf"), 24
-        )
+        # self.game_font = pygame.freetype.Font(
+        #     os.path.join(os.path.dirname(__file__), "secrcode.ttf"), 24
+        # )
 
         # Set up the drawing window
-
         self.renderOn = False
         self._seed()
 
@@ -66,8 +73,6 @@ class SimpleEnv(AECEnv):
         self.scenario = scenario
         self.world = world
         self.continuous_actions = continuous_actions
-        self.local_ratio = local_ratio
-        self.dynamic_rescaling = dynamic_rescaling
 
         self.scenario.reset_world(self.world, self.np_random)
 
@@ -99,37 +104,41 @@ class SimpleEnv(AECEnv):
             obs_dim = len(self.scenario.observation(agent, self.world))
             state_dim += obs_dim
             if self.continuous_actions:
-                self.action_spaces[agent.name] = spaces.Box(
-                    low=0, high=1, shape=(space_dim,)
-                )
+                self.action_spaces[agent.name] = Box(low=0, high=1, shape=(space_dim,))
             else:
-                self.action_spaces[agent.name] = spaces.Discrete(space_dim)
-            self.observation_spaces[agent.name] = spaces.Box(
+                self.action_spaces[agent.name] = Discrete(space_dim)
+            self.observation_spaces[agent.name] = Box(
                 low=-np.float32(np.inf),
                 high=+np.float32(np.inf),
                 shape=(obs_dim,),
                 dtype=np.float32,
             )
 
-        self.state_space = spaces.Box(
+        self.state_space = Box(
             low=-np.float32(np.inf),
             high=+np.float32(np.inf),
             shape=(state_dim,),
             dtype=np.float32,
         )
 
-        # Get the original cam_range
-        # This will be used to scale the rendering
-        all_poses = [entity.state.p_pos for entity in self.world.entities]
-        self.original_cam_range = np.max(np.abs(np.array(all_poses)))
-
         self.steps = 0
 
         self.current_actions = [None] * self.num_agents
 
+        # For reward function
+        self.target_region_overlay = None
+        self.agents_overlay = None
+
+    # Observation space should be defined here.
+    # lru_cache allows observation and action spaces to be memoized, reducing clock cycles required to get each agent's space.
+    # If your spaces change over time, remove this line (disable caching).
+    @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
         return self.observation_spaces[agent]
 
+    # Action space should be defined here.
+    # If your spaces change over time, remove this line (disable caching).
+    @functools.lru_cache(maxsize=None)
     def action_space(self, agent):
         return self.action_spaces[agent]
 
@@ -151,11 +160,22 @@ class SimpleEnv(AECEnv):
         return np.concatenate(states, axis=None)
 
     def reset(self, seed=None, options=None):
+        """Reset set the environment to a starting point.
+
+        It needs to initialize the following attributes:
+        - agents
+        - timestamp
+        - observation
+        - infos
+        - ...
+
+        And must set up the environment so that render(), step(), and observe() can be called without issues.
+        """
         if seed is not None:
             self._seed(seed=seed)
         self.scenario.reset_world(self.world, self.np_random)
 
-        self.agents = self.possible_agents[:]
+        self.agents = copy(self.possible_agents)
         self.rewards = {name: 0.0 for name in self.agents}
         self._cumulative_rewards = {name: 0.0 for name in self.agents}
         self.terminations = {name: False for name in self.agents}
@@ -186,21 +206,18 @@ class SimpleEnv(AECEnv):
 
         self.world.step()
 
-        global_reward = 0.0
-        if self.local_ratio is not None:
-            global_reward = float(self.scenario.global_reward(self.world))
+        global_reward = float(self.scenario.global_reward(self))
 
         for agent in self.world.agents:
-            agent_reward = float(self.scenario.reward(agent, self.world))
-            if self.local_ratio is not None:
-                reward = (
-                    global_reward * (1 - self.local_ratio)
-                    + agent_reward * self.local_ratio
-                )
-            else:
-                reward = agent_reward
-
-            self.rewards[agent.name] = reward
+            #     agent_reward = float(self.scenario.reward(agent, self.world))
+            #     if self.local_ratio is not None:
+            #         reward = (
+            #             global_reward * (1 - self.local_ratio)
+            #             + agent_reward * self.local_ratio
+            #         )
+            #     else:
+            #         reward = agent_reward
+            self.rewards[agent.name] = global_reward
 
     # set env action for a particular agent
     def _set_action(self, action, agent, action_space, time=None):
@@ -242,6 +259,18 @@ class SimpleEnv(AECEnv):
         assert len(action) == 0
 
     def step(self, action):
+        """Takes in an actions for all agents.
+
+        Needs to update:
+        - ...
+        - terminations
+        - truncations
+        - rewards
+        - timestamp
+        - infos
+
+        And any internal state used by observe() or render()
+        """
         if (
             self.terminations[self.agent_selection]
             or self.truncations[self.agent_selection]
@@ -277,6 +306,7 @@ class SimpleEnv(AECEnv):
             self.renderOn = True
 
     def render(self):
+        """Renders the environment."""
         if self.render_mode is None:
             gymnasium.logger.warn(
                 "You are calling render method without specifying any render mode."
@@ -296,42 +326,54 @@ class SimpleEnv(AECEnv):
 
     def draw(self):
         # clear screen
-        self.screen.fill((255, 255, 255))
+        self.screen.fill((255, 255, 255, 1))
 
-        # update bounds to center around agent
-        all_poses = [entity.state.p_pos for entity in self.world.entities]
-        cam_range = np.max(np.abs(np.array(all_poses)))
-
-        # The scaling factor is used for dynamic rescaling of the rendering - a.k.a Zoom In/Zoom Out effect
-        # The 0.9 is a factor to keep the entities from appearing "too" out-of-bounds
-        scaling_factor = 0.9 * self.original_cam_range / cam_range
+        # draw target region
+        self.target_region_overlay = pygame.Surface(
+            (self.width, self.height), pygame.SRCALPHA
+        )  # This surface will hold the target region
+        self.target_region_overlay.fill(
+            (0, 0, 0, 0)
+        )  # Fill with a fully transparent background
+        x, y = self.world.target_region.state.p_pos
+        x = x * (self.width - self.world.target_region.size[0])
+        y = self.height - (
+            y * (self.height - self.world.target_region.size[1])
+            + self.world.target_region.size[1]
+        )
+        pygame.draw.rect(
+            self.target_region_overlay,
+            self.world.target_region.color,
+            pygame.Rect(
+                x, y, self.world.target_region.size[0], self.world.target_region.size[1]
+            ),
+        )
 
         # update geometry and text positions
+        self.agents_overlay = pygame.Surface(
+            (self.width, self.height), pygame.SRCALPHA
+        )  # This surface will hold the agents
+        self.agents_overlay.fill(
+            (0, 0, 0, 0)
+        )  # Fill with a fully transparent background
         text_line = 0
         for e, entity in enumerate(self.world.entities):
-            # geometry
             x, y = entity.state.p_pos
-            y *= (
-                -1
-            )  # this makes the display mimic the old pyglet setup (ie. flips image)
-            x = (
-                (x / cam_range) * self.width // 2 * 0.9
-            )  # the .9 is just to keep entities from appearing "too" out-of-bounds
-            y = (y / cam_range) * self.height // 2 * 0.9
-            x += self.width // 2
-            y += self.height // 2
-
-            # 350 is an arbitrary scale factor to get pygame to render similar sizes as pyglet
-            if self.dynamic_rescaling:
-                radius = entity.size * 350 * scaling_factor
-            else:
-                radius = entity.size * 350
-
-            pygame.draw.circle(self.screen, entity.color * 200, (x, y), radius)
-            pygame.draw.circle(self.screen, (0, 0, 0), (x, y), radius, 1)  # borders
-            assert (
-                0 < x < self.width and 0 < y < self.height
-            ), f"Coordinates {(x, y)} are out of bounds."
+            x = x * (self.width - entity.size) + entity.size // 2
+            y = -1 * (y * (self.height - entity.size) + entity.size // 2) + self.height
+            pygame.draw.circle(self.agents_overlay, entity.color, (x, y), entity.size)
+            pygame.draw.circle(
+                self.agents_overlay, (0, 0, 0), (x, y), 10
+            )  # center point
+            # assert (
+            #     0 < x < self.width and 0 < y < self.height
+            # ), f"Coordinates {(x, y)} are out of bounds."
+            # TODO - add if show target
+            # Draw estimate target
+            x, y = entity.state.target_pos
+            x = x * (self.width - entity.size) + entity.size // 2
+            y = -1 * (y * (self.height - entity.size) + entity.size // 2) + self.height
+            pygame.draw.circle(self.screen, entity.color, (x, y), entity.size // 2)
 
             # text
             if isinstance(entity, Agent):
@@ -354,7 +396,12 @@ class SimpleEnv(AECEnv):
                 )
                 text_line += 1
 
+        # Blit the transparent surface (overlay) onto the screen
+        self.screen.blit(self.target_region_overlay, (0, 0))
+        self.screen.blit(self.agents_overlay, (0, 0))
+
     def close(self):
         if self.screen is not None:
             pygame.quit()
             self.screen = None
+            self.renderOn = False
